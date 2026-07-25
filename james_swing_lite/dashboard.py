@@ -349,6 +349,10 @@ def create_dashboard(supervisor) -> "FastAPI":
     class SymbolRequest(BaseModel):
         symbol: str
 
+    class ExecuteRequest(BaseModel):
+        action: str
+        price: float = 0.0
+
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
         return HTML
@@ -367,6 +371,59 @@ def create_dashboard(supervisor) -> "FastAPI":
         try:
             supervisor.change_symbol(sym)
             return {"ok": True, "symbol": sym}
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @app.post("/api/execute")
+    async def execute_order(req: ExecuteRequest):
+        """텔레그램 명령으로 직접 진입/청산 실행"""
+        from .domain import DecisionAction, MarketBias, StrategyDecision
+        from decimal import Decimal
+        action_map = {
+            "ENTER_LONG":   DecisionAction.ENTER_LONG,
+            "ENTER_SHORT":  DecisionAction.ENTER_SHORT,
+            "EXIT_PARTIAL": DecisionAction.EXIT_PARTIAL,
+            "EXIT_ALL":     DecisionAction.EXIT_ALL,
+        }
+        action = action_map.get(req.action.upper())
+        if not action:
+            return JSONResponse({"ok": False, "error": f"알 수 없는 액션: {req.action}"}, status_code=400)
+        try:
+            # 지정가 있으면 시장가 오버라이드
+            from .domain import MarketSnapshot
+            import copy
+            market = copy.copy(supervisor.latest_market)
+            if req.price > 0:
+                market = MarketSnapshot(
+                    market.symbol, Decimal(str(req.price)),
+                    market.candles, market.timestamp,
+                    market.stale, market.reason,
+                    market.technical, market.sentiment,
+                )
+            decision = StrategyDecision(
+                symbol=market.symbol,
+                action=action,
+                reason=f"텔레그램 수동 명령: {req.action}",
+                order_generation_allowed=True,
+                market_bias=MarketBias.NEUTRAL,
+            )
+            result = supervisor.execution.execute(
+                decision, supervisor.positions,
+                supervisor.latest_accounting, market,
+            )
+            if result.accepted:
+                supervisor.accounting.apply_fill(result.pnl, result.fee)
+                supervisor.db.save_trade_history(supervisor.config.symbol, result)
+                return {
+                    "ok": True,
+                    "message": result.reason,
+                    "fill_price": str(result.fill_price),
+                    "quantity": str(result.quantity),
+                    "pnl": str(result.pnl),
+                    "fee": str(result.fee),
+                }
+            else:
+                return JSONResponse({"ok": False, "error": result.reason}, status_code=400)
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
