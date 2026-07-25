@@ -114,32 +114,30 @@ class LiteSupervisor:
             await tg.notify_error(str(exc))
 
     def change_symbol(self, symbol: str) -> None:
-        """실시간 종목 전환. config yaml도 업데이트."""
-        import yaml
-        from pathlib import Path
+        """실시간 종목 전환."""
         allowed = {"BTCUSDT", "ADAUSDT"}
         if symbol not in allowed:
             raise ValueError(f"지원 종목: {allowed}")
-        # config yaml 업데이트
+        if symbol == self.config.symbol:
+            return  # 이미 같은 종목
+
+        # yaml 파일에서 symbols 항목만 교체 (파싱 없이 텍스트 치환)
         config_path = Path(__file__).resolve().parent.parent / "config" / "swing_lite.yaml"
         if config_path.exists():
-            raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-            raw.setdefault("market", {})["symbols"] = [symbol]
-            config_path.write_text(
-                yaml.dump(raw, allow_unicode=True, default_flow_style=False),
-                encoding="utf-8"
-            )
-        # 런타임 재구성
-        from .config import load_config
-        self.config = load_config(config_path)
+            text = config_path.read_text(encoding="utf-8")
+            for sym in ("BTCUSDT", "ADAUSDT"):
+                text = text.replace(f"    - {sym}", f"    - {symbol}")
+            config_path.write_text(text, encoding="utf-8")
+
+        # 런타임 config만 교체 (기존 config 복사 후 symbol만 변경)
+        import dataclasses
+        self.config = dataclasses.replace(self.config, symbol=symbol)
         self.market_data = BinancePublicMarketData(self.config)
         self.market_state = MarketStateEngine(self.config)
-        self.positions = PositionManager()
-        self.positions.restore(PositionManager.deserialize(self.db.load_position_payload()))
         self.risk = RiskEngine(self.config)
         self.execution = PaperExecutionEngine(config=self.config)
         self.latest_market = MarketSnapshot(
-            self.config.symbol, Decimal("0"), {}, datetime.now(timezone.utc), True, "종목 전환됨"
+            symbol, Decimal("0"), {}, datetime.now(timezone.utc), True, "종목 전환됨"
         )
         self.latest_decision = self.strategy.decide(self.latest_market)
 
