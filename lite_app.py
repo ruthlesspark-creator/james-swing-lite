@@ -10,6 +10,7 @@ import uvicorn
 
 from james_swing_lite.app import LiteSupervisor
 from james_swing_lite.dashboard import create_dashboard
+from james_swing_lite.updater import check_and_update
 
 
 def bundled_path(relative: str) -> Path:
@@ -35,12 +36,16 @@ async def open_browser(url: str) -> None:
 
 
 async def main() -> None:
+    # 자동 업데이트 확인 (.exe 모드에서만 동작)
+    if check_and_update():
+        sys.exit(0)  # 업데이트 후 재시작
+
     supervisor = LiteSupervisor(bundled_path("config/swing_lite.yaml"))
     app = create_dashboard(supervisor)
     port = find_available_port()
     url = f"http://127.0.0.1:{port}"
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False))
-    print(f"[정상] JAMES 스윙 Lite v0.1.0 모의투자가 시작되었습니다: {url}")
+    print(f"[정상] JAMES 스윙 Lite v1.0.0 모의투자가 시작되었습니다: {url}")
     await asyncio.gather(supervisor.start(), server.serve(), open_browser(url))
 
 
