@@ -362,9 +362,13 @@ def create_dashboard(supervisor) -> "FastAPI":
         return supervisor.snapshot()
 
     @app.post("/api/set_symbol")
-    async def set_symbol(req: SymbolRequest):
+    async def set_symbol(request: Request):
         """실시간 종목 전환 API"""
-        sym = req.symbol.upper()
+        try:
+            body = await request.json()
+            sym = str(body.get("symbol", "")).upper()
+        except Exception:
+            return JSONResponse({"ok": False, "error": "JSON 파싱 오류"}, status_code=400)
         allowed = {"BTCUSDT", "ADAUSDT"}
         if sym not in allowed:
             return JSONResponse({"ok": False, "error": f"지원 종목: {allowed}"}, status_code=400)
@@ -375,27 +379,31 @@ def create_dashboard(supervisor) -> "FastAPI":
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
     @app.post("/api/execute")
-    async def execute_order(req: ExecuteRequest):
+    async def execute_order(request: Request):
         """텔레그램 명령으로 직접 진입/청산 실행"""
-        from .domain import DecisionAction, MarketBias, StrategyDecision
+        from .domain import DecisionAction, MarketBias, StrategyDecision, MarketSnapshot
         from decimal import Decimal
+        import copy
+        try:
+            body = await request.json()
+            action_str = str(body.get("action", "")).upper()
+            price_val = float(body.get("price", 0))
+        except Exception:
+            return JSONResponse({"ok": False, "error": "JSON 파싱 오류"}, status_code=400)
         action_map = {
             "ENTER_LONG":   DecisionAction.ENTER_LONG,
             "ENTER_SHORT":  DecisionAction.ENTER_SHORT,
             "EXIT_PARTIAL": DecisionAction.EXIT_PARTIAL,
             "EXIT_ALL":     DecisionAction.EXIT_ALL,
         }
-        action = action_map.get(req.action.upper())
+        action = action_map.get(action_str)
         if not action:
-            return JSONResponse({"ok": False, "error": f"알 수 없는 액션: {req.action}"}, status_code=400)
+            return JSONResponse({"ok": False, "error": f"알 수 없는 액션: {action_str}"}, status_code=400)
         try:
-            # 지정가 있으면 시장가 오버라이드
-            from .domain import MarketSnapshot
-            import copy
             market = copy.copy(supervisor.latest_market)
-            if req.price > 0:
+            if price_val > 0:
                 market = MarketSnapshot(
-                    market.symbol, Decimal(str(req.price)),
+                    market.symbol, Decimal(str(price_val)),
                     market.candles, market.timestamp,
                     market.stale, market.reason,
                     market.technical, market.sentiment,
@@ -403,7 +411,7 @@ def create_dashboard(supervisor) -> "FastAPI":
             decision = StrategyDecision(
                 symbol=market.symbol,
                 action=action,
-                reason=f"텔레그램 수동 명령: {req.action}",
+                reason=f"텔레그램 수동 명령: {action_str}",
                 order_generation_allowed=True,
                 market_bias=MarketBias.NEUTRAL,
             )
