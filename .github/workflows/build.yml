@@ -10,70 +10,94 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: 코드 체크아웃
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Python 3.12 설정
+    - name: Setup Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: "3.12"
 
-    - name: 패키지 설치
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+        pip install aiohttp fastapi "uvicorn[standard]" pyyaml websockets pyinstaller
+      shell: cmd
 
-    - name: 버전 읽기
+    - name: Read version
       id: version
       run: |
-        $v = (Get-Content version.json | ConvertFrom-Json).version
-        echo "VERSION=$v" >> $env:GITHUB_OUTPUT
-      shell: pwsh
+        python -c "import json; v=json.load(open('version.json'))['version']; print('VERSION='+v)" >> %GITHUB_OUTPUT%
+      shell: cmd
 
-    - name: PyInstaller로 EXE 빌드
+    - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --noconfirm --onefile --windowed `
-          --name "JAMES_스윙_Lite" `
-          --add-data "config;config" `
-          --add-data "version.json;." `
-          --hidden-import "james_swing_lite" `
-          --hidden-import "uvicorn.logging" `
-          --hidden-import "uvicorn.loops" `
-          --hidden-import "uvicorn.loops.auto" `
-          --hidden-import "uvicorn.protocols" `
-          --hidden-import "uvicorn.protocols.http" `
-          --hidden-import "uvicorn.protocols.http.auto" `
-          --hidden-import "uvicorn.protocols.websockets" `
-          --hidden-import "uvicorn.protocols.websockets.auto" `
-          --hidden-import "uvicorn.lifespan" `
-          --hidden-import "uvicorn.lifespan.on" `
-          --hidden-import "aiohttp" `
-          --hidden-import "yaml" `
+        pyinstaller --noconfirm --onefile --windowed ^
+          --name "JAMES_Swing_Lite" ^
+          --add-data "config;config" ^
+          --add-data "version.json;." ^
+          --hidden-import "james_swing_lite" ^
+          --hidden-import "james_swing_lite.app" ^
+          --hidden-import "james_swing_lite.dashboard" ^
+          --hidden-import "james_swing_lite.updater" ^
+          --hidden-import "james_swing_lite.config" ^
+          --hidden-import "james_swing_lite.domain" ^
+          --hidden-import "james_swing_lite.strategy" ^
+          --hidden-import "james_swing_lite.sentiment" ^
+          --hidden-import "james_swing_lite.market_data" ^
+          --hidden-import "james_swing_lite.indicators" ^
+          --hidden-import "james_swing_lite.paper_execution" ^
+          --hidden-import "james_swing_lite.accounting" ^
+          --hidden-import "james_swing_lite.position" ^
+          --hidden-import "james_swing_lite.risk" ^
+          --hidden-import "james_swing_lite.storage" ^
+          --hidden-import "james_swing_lite.health" ^
+          --hidden-import "james_swing_lite.market_state" ^
+          --hidden-import "uvicorn.logging" ^
+          --hidden-import "uvicorn.loops" ^
+          --hidden-import "uvicorn.loops.auto" ^
+          --hidden-import "uvicorn.protocols" ^
+          --hidden-import "uvicorn.protocols.http" ^
+          --hidden-import "uvicorn.protocols.http.auto" ^
+          --hidden-import "uvicorn.protocols.websockets" ^
+          --hidden-import "uvicorn.protocols.websockets.auto" ^
+          --hidden-import "uvicorn.lifespan" ^
+          --hidden-import "uvicorn.lifespan.on" ^
+          --hidden-import "aiohttp" ^
+          --hidden-import "yaml" ^
+          --collect-all "aiohttp" ^
           lite_app.py
-      shell: pwsh
+      shell: cmd
 
-    - name: 빌드 결과 확인
+    - name: List dist folder
+      run: dir dist\
+      shell: cmd
+
+    - name: Create launcher VBS
       run: |
-        ls dist/
-      shell: pwsh
+        echo Set oShell = CreateObject("WScript.Shell") > dist\JAMES_launcher.vbs
+        echo oShell.Run "JAMES_Swing_Lite.exe", 1, False >> dist\JAMES_launcher.vbs
+      shell: cmd
 
-    - name: GitHub Release 생성
+    - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.version.outputs.VERSION }}
-        name: "JAMES 스윙 Lite v${{ steps.version.outputs.VERSION }}"
+        name: "JAMES Swing Lite v${{ steps.version.outputs.VERSION }}"
         body: |
-          ## JAMES 스윙 Lite v${{ steps.version.outputs.VERSION }}
-          
+          ## JAMES Swing Lite v${{ steps.version.outputs.VERSION }}
+
           ### 설치 방법
-          1. 아래 `JAMES_스윙_Lite.exe` 다운로드
-          2. 더블클릭으로 실행
-          3. 브라우저에서 대시보드 자동 오픈
-          
-          ### 변경사항
-          최신 업데이트 내용
-        files: dist/JAMES_스윙_Lite.exe
+          1. `JAMES_Swing_Lite.exe` 다운로드
+          2. 더블클릭으로 실행 (Python 설치 불필요)
+          3. 브라우저에서 대시보드 자동 오픈 (http://127.0.0.1:8780)
+
+          ### 특징
+          - BTCUSDT / ADAUSDT 종목 선택
+          - 모의투자 전용 (실거래 없음)
+          - 자동 업데이트 지원
+        files: |
+          dist/JAMES_Swing_Lite.exe
         make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
