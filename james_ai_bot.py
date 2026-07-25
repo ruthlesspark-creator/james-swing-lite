@@ -34,6 +34,10 @@ HELP_TEXT = """🤖 <b>JAMES AI 어시스턴트</b>
 익절 — 75% 부분 익절
 청산 — 전량 청산
 
+<b>🔄 종목 변경</b>
+BTC — BTCUSDT로 전환
+ADA — ADAUSDT로 전환
+
 <b>📊 조회 명령어</b>
 /현황 — 현재 시장 + 포지션 조회
 /분석 — AI 시장 분석
@@ -105,7 +109,22 @@ def james_get() -> tuple[str, dict]:
         return f"⚠️ JAMES 연결 실패: {e}", "", {}
 
 
-def james_execute(action: str, price: float = 0) -> str:
+def james_set_symbol(symbol: str) -> str:
+    """종목 변경 API 호출"""
+    try:
+        payload = json.dumps({"symbol": symbol}).encode()
+        req = urllib.request.Request(
+            f"{JAMES_API}/set_symbol",
+            data=payload, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            d = json.loads(resp.read().decode())
+        return "성공" if d.get("ok") else d.get("error", "실패")
+    except Exception as e:
+        return f"오류: {e}"
+
+
+
     """JAMES 프로그램에 직접 실행 명령 전달"""
     try:
         payload = json.dumps({"action": action, "price": price}).encode()
@@ -146,6 +165,17 @@ def handle(text: str) -> None:
     text = text.strip()
     low = text.lower()
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {text}")
+
+    # ── 종목 변경 ─────────────────────────────────────────────
+    if text.upper() in ("BTC", "BTCUSDT", "BTC 변경", "BTC로변경"):
+        msg = james_set_symbol("BTCUSDT")
+        tg_send(f"🔄 <b>종목 변경: BTCUSDT</b>\n결과: {msg}\n다음 데이터 수신까지 30초 대기")
+        return
+
+    if text.upper() in ("ADA", "ADAUSDT", "ADA 변경", "ADA로변경"):
+        msg = james_set_symbol("ADAUSDT")
+        tg_send(f"🔄 <b>종목 변경: ADAUSDT</b>\n결과: {msg}\n다음 데이터 수신까지 30초 대기")
+        return
 
     # ── 직접 실행 명령어 ──────────────────────────────────────
     # "롱 진입" or "롱진입"
