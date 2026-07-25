@@ -1,0 +1,79 @@
+name: Build EXE
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: 코드 체크아웃
+      uses: actions/checkout@v4
+
+    - name: Python 3.12 설정
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: 패키지 설치
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: 버전 읽기
+      id: version
+      run: |
+        $v = (Get-Content version.json | ConvertFrom-Json).version
+        echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: PyInstaller로 EXE 빌드
+      run: |
+        pyinstaller --noconfirm --onefile --windowed `
+          --name "JAMES_스윙_Lite" `
+          --add-data "config;config" `
+          --add-data "version.json;." `
+          --hidden-import "james_swing_lite" `
+          --hidden-import "uvicorn.logging" `
+          --hidden-import "uvicorn.loops" `
+          --hidden-import "uvicorn.loops.auto" `
+          --hidden-import "uvicorn.protocols" `
+          --hidden-import "uvicorn.protocols.http" `
+          --hidden-import "uvicorn.protocols.http.auto" `
+          --hidden-import "uvicorn.protocols.websockets" `
+          --hidden-import "uvicorn.protocols.websockets.auto" `
+          --hidden-import "uvicorn.lifespan" `
+          --hidden-import "uvicorn.lifespan.on" `
+          --hidden-import "aiohttp" `
+          --hidden-import "yaml" `
+          lite_app.py
+      shell: pwsh
+
+    - name: 빌드 결과 확인
+      run: |
+        ls dist/
+      shell: pwsh
+
+    - name: GitHub Release 생성
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: "JAMES 스윙 Lite v${{ steps.version.outputs.VERSION }}"
+        body: |
+          ## JAMES 스윙 Lite v${{ steps.version.outputs.VERSION }}
+          
+          ### 설치 방법
+          1. 아래 `JAMES_스윙_Lite.exe` 다운로드
+          2. 더블클릭으로 실행
+          3. 브라우저에서 대시보드 자동 오픈
+          
+          ### 변경사항
+          최신 업데이트 내용
+        files: dist/JAMES_스윙_Lite.exe
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
