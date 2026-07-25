@@ -1,0 +1,53 @@
+engine:
+  name: JAMES_SWING_LITE
+  mode: PAPER
+  version: swing_ema_rsi_sentiment_v1
+  paper_only: true
+  live_enabled: false
+  order_generation_enabled: true
+
+market:
+  symbols:
+    - BTCUSDT
+  timeframes:
+    - 4h
+    - 1h
+    - 15m
+  data_stale_seconds: 1800
+  rest_base_url: https://fapi.binance.com
+  websocket_base_url: wss://fstream.binance.com/ws
+
+account:
+  initial_equity: 1000
+  currency: USDT
+
+risk:
+  leverage: 20
+  max_account_risk_pct: 0.025
+  max_total_margin_pct: 0.43
+  min_liquidation_distance_pct: 0.05
+
+position:
+  entry_allocations:
+    - 0.15
+    - 0.10
+    - 0.10
+    - 0.08
+  first_exit_ratio: 0.75
+  runner_ratio: 0.25
+  max_open_positions: 1
+
+fees:
+  maker_fee_rate: 0.0002
+  taker_fee_rate: 0.0004
+
+funding:
+  mode: REAL_MARKET_FUNDING
+
+storage:
+  database_path: outputs/data/james_swing_lite.sqlite3
+
+dashboard:
+  language: ko
+  host: 127.0.0.1
+  port: 8780
