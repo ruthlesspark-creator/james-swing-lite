@@ -16,6 +16,7 @@ from .position import PositionManager
 from .risk import RiskEngine
 from .storage import LiteDatabase
 from .strategy import StrategyEngine
+from . import telegram_notify as tg
 
 
 class LiteSupervisor:
@@ -38,8 +39,10 @@ class LiteSupervisor:
         self.latest_accounting = self.accounting.snapshot(None, Decimal("0"), Decimal("0"))
         self.latest_risk = self.risk.plan(self.latest_accounting, Decimal("0"))
         self._stop = asyncio.Event()
+        self._report_counter = 0  # 30분 리포트 카운터
 
     async def start(self) -> None:
+        await tg.notify_startup(self.config.symbol)
         while not self._stop.is_set():
             await self.step()
             await asyncio.sleep(30)
@@ -70,11 +73,27 @@ class LiteSupervisor:
                 if result.accepted:
                     self.accounting.apply_fill(result.pnl, result.fee)
                     self.db.save_trade_history(self.config.symbol, result)
-                    # accounting 재계산 (fill 반영 후)
+                    # Telegram 체결 알림
+                    await tg.notify_fill(
+                        result.action, self.config.symbol,
+                        result.fill_price, result.quantity,
+                        result.pnl, result.fee,
+                    )
+                    # accounting 재계산
                     position = self.positions.current()
                     margin = self.positions.margin_used(self.config.leverage)
                     self.latest_accounting = self.accounting.snapshot(
                         position, self.latest_market.last_price, margin
+                    )
+            else:
+                # 신호 발생 시 Telegram 알림 (체결 전 신호 알림)
+                action = self.latest_decision.action.value
+                if action not in ("HOLD", "NO_DECISION"):
+                    await tg.notify_signal(
+                        action, self.config.symbol,
+                        self.latest_market.last_price,
+                        self.latest_decision.reason,
+                        self.config.entry_allocations,
                     )
 
             self.db.save_market(self.latest_market)
@@ -82,9 +101,17 @@ class LiteSupervisor:
             self.db.save_risk_plan(self.latest_risk)
             self.db.save_position(self.positions.current())
             self.db.save_system_state(self.health.state(self.execution.generated_orders))
+
+            # 30분마다 리포트 (60 * 30초 = 1800초 = 60 스텝)
+            self._report_counter += 1
+            if self._report_counter >= 60:
+                self._report_counter = 0
+                await tg.notify_report(self.snapshot())
+
         except Exception as exc:
             self.health.errors.append(str(exc))
             self.db.save_error("LITE_STEP_ERROR", {"error": str(exc), "type": type(exc).__name__})
+            await tg.notify_error(str(exc))
 
     def change_symbol(self, symbol: str) -> None:
         """실시간 종목 전환. config yaml도 업데이트."""
