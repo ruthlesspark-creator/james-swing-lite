@@ -1,0 +1,5 @@
+aiohttp==3.9.5
+fastapi==0.111.0
+PyYAML==6.0.1
+uvicorn[standard]==0.30.1
+websockets==12.0
