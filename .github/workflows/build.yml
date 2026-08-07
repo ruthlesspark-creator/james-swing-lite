@@ -75,12 +75,24 @@ jobs:
 
     - name: Create launcher VBS
       run: |
-        echo Set oShell = CreateObject("WScript.Shell") > dist\JAMES_launcher.vbs
-        echo oShell.Run "JAMES_Swing_Lite.exe", 1, False >> dist\JAMES_launcher.vbs
+        echo Set oShell = CreateObject("WScript.Shell") > "dist\JAMES SWING LITE 실행.vbs"
+        echo oShell.Run chr(34) ^& WScript.ScriptFullName ^& chr(34), 0, False >> "dist\JAMES SWING LITE 실행.vbs"
+        echo Set objFSO = CreateObject("Scripting.FileSystemObject") >> "dist\JAMES SWING LITE 실행.vbs"
+        echo strDir = objFSO.GetParentFolderName(WScript.ScriptFullName) >> "dist\JAMES SWING LITE 실행.vbs"
+        echo Set oShell2 = CreateObject("WScript.Shell") >> "dist\JAMES SWING LITE 실행.vbs"
+        echo oShell2.Run chr(34) ^& strDir ^& "\JAMES_Swing_Lite.exe" ^& chr(34), 1, False >> "dist\JAMES SWING LITE 실행.vbs"
       shell: cmd
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: JAMES-SWING-LITE-WINDOWS
+        path: dist\
+        retention-days: 30
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
       with:
         tag_name: v${{ steps.version.outputs.VERSION }}
         name: "JAMES Swing Lite v${{ steps.version.outputs.VERSION }}"
@@ -90,11 +102,11 @@ jobs:
           ### 설치 방법
           1. `JAMES_Swing_Lite.exe` 다운로드
           2. 더블클릭으로 실행 (Python 설치 불필요)
-          3. 브라우저에서 대시보드 자동 오픈 (http://127.0.0.1:8780)
+          3. 브라우저에서 자동으로 대시보드 열림 (http://127.0.0.1:8780)
 
           ### 특징
-          - BTCUSDT / ADAUSDT 종목 선택
-          - 모의투자 전용 (실거래 없음)
+          - BTCUSDT / ADAUSDT 스윙 분석
+          - 페이퍼트레이딩 모드 (실거래 없음)
           - 자동 업데이트 지원
         files: |
           dist/JAMES_Swing_Lite.exe
