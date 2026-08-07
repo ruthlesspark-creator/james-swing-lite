@@ -69,25 +69,20 @@ jobs:
           lite_app.py
       shell: cmd
 
-    - name: List dist folder
-      run: dir dist\
-      shell: cmd
-
-    - name: Create launcher VBS
+    - name: Prepare release folder
       run: |
-        echo Set oShell = CreateObject("WScript.Shell") > "dist\JAMES SWING LITE 실행.vbs"
-        echo oShell.Run chr(34) ^& WScript.ScriptFullName ^& chr(34), 0, False >> "dist\JAMES SWING LITE 실행.vbs"
-        echo Set objFSO = CreateObject("Scripting.FileSystemObject") >> "dist\JAMES SWING LITE 실행.vbs"
-        echo strDir = objFSO.GetParentFolderName(WScript.ScriptFullName) >> "dist\JAMES SWING LITE 실행.vbs"
-        echo Set oShell2 = CreateObject("WScript.Shell") >> "dist\JAMES SWING LITE 실행.vbs"
-        echo oShell2.Run chr(34) ^& strDir ^& "\JAMES_Swing_Lite.exe" ^& chr(34), 1, False >> "dist\JAMES SWING LITE 실행.vbs"
+        mkdir release
+        copy dist\JAMES_Swing_Lite.exe release\JAMES_Swing_Lite.exe
+        powershell -Command "$vbs = \"Set oShell = CreateObject(\"\"WScript.Shell\"\")`r`nstrDir = CreateObject(\"\"Scripting.FileSystemObject\"\").GetParentFolderName(WScript.ScriptFullName)`r`noShell.Run chr(34) & strDir & \"\"\\JAMES_Swing_Lite.exe\"\" & chr(34), 1, False\"; [System.IO.File]::WriteAllText('release\JAMES-SWING-LITE-RUN.vbs', $vbs, [System.Text.Encoding]::UTF8)"
+        dir release\
       shell: cmd
 
-    - name: Upload Artifact
+    - name: Upload Windows Artifact
       uses: actions/upload-artifact@v4
       with:
         name: JAMES-SWING-LITE-WINDOWS
-        path: dist\
+        path: release\
+        if-no-files-found: error
         retention-days: 30
 
     - name: Create Release
@@ -99,17 +94,17 @@ jobs:
         body: |
           ## JAMES Swing Lite v${{ steps.version.outputs.VERSION }}
 
-          ### 설치 방법
-          1. `JAMES_Swing_Lite.exe` 다운로드
-          2. 더블클릭으로 실행 (Python 설치 불필요)
-          3. 브라우저에서 자동으로 대시보드 열림 (http://127.0.0.1:8780)
+          ### Install
+          1. Download `JAMES_Swing_Lite.exe`
+          2. Double-click to run (no Python required)
+          3. Dashboard opens automatically at http://127.0.0.1:8780
 
-          ### 특징
-          - BTCUSDT / ADAUSDT 스윙 분석
-          - 페이퍼트레이딩 모드 (실거래 없음)
-          - 자동 업데이트 지원
+          ### Features
+          - BTCUSDT / ADAUSDT swing analysis
+          - Paper trading mode (no real orders)
+          - Auto-update support
         files: |
-          dist/JAMES_Swing_Lite.exe
+          release/JAMES_Swing_Lite.exe
         make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
