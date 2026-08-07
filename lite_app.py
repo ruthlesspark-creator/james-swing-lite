@@ -59,12 +59,14 @@ def _patch_stdio() -> None:
 
 
 def _resolve_log_dir() -> Path:
-    """로그 디렉터리 결정: EXE 옆 logs/ 또는 %APPDATA%/JAMES_Swing_Lite/logs/."""
-    if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).parent
-        log_dir = exe_dir / "logs"
+    """로그 디렉터리 결정: %LOCALAPPDATA%\\JAMES_SWING_LITE\\logs\\."""
+    # config.py 와 동일한 앱 데이터 루트 사용 (EXE 위치에 쓰지 않음)
+    import os
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        log_dir = Path(local_app_data) / "JAMES_SWING_LITE" / "logs"
     else:
-        log_dir = Path(__file__).resolve().parent / "logs"
+        log_dir = Path.home() / "JAMES_SWING_LITE" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 
