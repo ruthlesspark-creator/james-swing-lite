@@ -2,11 +2,49 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+import os
 from pathlib import Path
 import sys
 from typing import Any
 
 import yaml
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 배포 환경 데이터 루트 결정
+# PyInstaller --windowed EXE, 개발환경 모두에서 안전하게 동작하는
+# 사용자 쓰기 가능 영구 경로를 반환한다.
+#
+# 우선순위:
+#  1. %LOCALAPPDATA%\JAMES_SWING_LITE  (Windows 권장 — Program Files에서도 쓰기 가능)
+#  2. ~/JAMES_SWING_LITE               (Linux/macOS 폴백)
+#  3. ./JAMES_SWING_LITE               (환경변수 없을 때 최후 폴백)
+#
+# sys._MEIPASS 는 읽기 전용 번들 리소스 경로이므로
+# DB/로그 등 쓰기 데이터 저장에 절대 사용하지 않는다.
+# ──────────────────────────────────────────────────────────────────────────────
+
+APP_NAME = "JAMES_SWING_LITE"
+
+
+def _resolve_app_data_root() -> Path:
+    """어느 Windows PC에서 실행해도 쓰기 가능한 앱 데이터 루트 경로 반환."""
+    # Windows: %LOCALAPPDATA%\JAMES_SWING_LITE
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / APP_NAME
+    # macOS/Linux: ~/JAMES_SWING_LITE
+    home = Path.home()
+    if home != Path("/"):
+        return home / APP_NAME
+    # 최후 폴백: 현재 작업 디렉터리
+    return Path.cwd() / APP_NAME
+
+
+def _ensure_app_dirs(root: Path) -> None:
+    """앱 데이터 하위 폴더 자동 생성 (data/, logs/, config/)."""
+    for sub in ("data", "logs", "config"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
 
 
 @dataclass(frozen=True)
@@ -65,12 +103,16 @@ def load_config(path: Path) -> LiteConfig:
         raise ValueError("실거래(LIVE)는 비활성 상태를 유지해야 합니다")
     # 모의투자(paper_only=true) 모드에서는 order_generation_enabled 허용
 
-    db_path = Path(str(storage.get("database_path", "outputs/data/james_swing_lite.sqlite3")))
-    if not db_path.is_absolute():
-        if getattr(sys, "frozen", False):
-            db_path = Path(sys.executable).resolve().parents[3] / db_path
-        else:
-            db_path = Path.cwd() / db_path
+    db_path_raw = str(storage.get("database_path", ""))
+
+    if db_path_raw and Path(db_path_raw).is_absolute():
+        # YAML에 절대경로가 명시된 경우 그대로 사용 (개발환경 커스텀 경로 지원)
+        db_path = Path(db_path_raw)
+    else:
+        # 배포 환경: %LOCALAPPDATA%\JAMES_SWING_LITE\data\james_swing_lite.db
+        app_root = _resolve_app_data_root()
+        _ensure_app_dirs(app_root)
+        db_path = app_root / "data" / "james_swing_lite.db"
 
     return LiteConfig(
         symbol=symbols[0],
